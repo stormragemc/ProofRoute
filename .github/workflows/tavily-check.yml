@@ -1,0 +1,63 @@
+name: Check Tavily search access
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/tavily-check.yml]
+
+permissions: {}
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Retrieve public documentation with a single Tavily search
+        env:
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          from urllib.error import HTTPError, URLError
+          from urllib.parse import urlsplit, urlunsplit
+          from urllib.request import Request, urlopen
+
+          key = os.environ.get("TAVILY_API_KEY", "").strip()
+          if not key:
+              sys.exit("TAVILY_API_KEY is missing from repository secrets.")
+          query = {
+              "query": "MDN Web Speech API SpeechRecognition processLocally default local or remote processing",
+              "include_domains": ["developer.mozilla.org"],
+              "search_depth": "basic",
+              "max_results": 3,
+              "include_raw_content": "markdown",
+              "include_answer": False,
+          }
+          request = Request(
+              "https://api.tavily.com/search",
+              headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+              data=json.dumps(query).encode(),
+              method="POST",
+          )
+          try:
+              with urlopen(request, timeout=45) as response:
+                  result = json.load(response)
+          except HTTPError as error:
+              sys.exit(f"Tavily returned HTTP {error.code}.")
+          except (URLError, TimeoutError, ValueError):
+              sys.exit("Tavily could not return a readable search response.")
+
+          pages = set()
+          for hit in result.get("results", []):
+              url = urlsplit(hit.get("url") or "")
+              if url.scheme == "https" and url.hostname == "developer.mozilla.org" and (hit.get("raw_content") or "").strip():
+                  pages.add(urlunsplit(("https", url.hostname, url.path, "", "")))
+          if not pages:
+              sys.exit("The search returned no MDN pages with extracted text.")
+          print(f"Tavily returned {len(pages)} MDN pages with extracted text:")
+          for page in sorted(pages):
+              print("Source", page)
+          PY
