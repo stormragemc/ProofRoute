@@ -5,4 +5,4 @@
 - [ ] 2–3 minute demo video linked in the README
 - [ ] Demo shows a real question, the answer, opened citations, and a failure case
 - [ ] No API keys committed (`.env` is git-ignored)
-- [ ] Submitted via the link emailed to registered participants
+- [ ] Submitted through the [official submission form](https://hackathon.odsc.ai/submit)
